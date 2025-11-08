@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useAppContext } from '../hooks/useAppContext';
 import { calculateWeekTotal, formatMinutesToHM, formatMinutesToHours } from '../utils/timeUtils';
-import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend, ReferenceLine } from 'recharts';
 import { parseISO, format, isSameMonth } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { Week } from '../types';
@@ -66,15 +66,25 @@ const Dashboard: React.FC = () => {
     return { totalMinutes, remainingMinutes, weeksRecorded, monthlyMinutes: monthlyMinutes + monthlyAdjustmentMinutes };
   }, [activeUser, userWeeks, userAdjustments]);
   
-  const progressData = useMemo(() => {
-    if (!activeUser) return [];
-    const worked = formatMinutesToHours(stats.totalMinutes);
-    const remaining = formatMinutesToHours(stats.remainingMinutes);
-    return [
-      { name: 'Travaillées', value: worked > 0 ? worked : 0 },
-      { name: 'Restantes', value: remaining > 0 ? remaining : 0 }
-    ];
-  }, [activeUser, stats]);
+  const adjustmentChartData = useMemo(() => {
+    if (userAdjustments.length === 0) return [];
+
+    const groupedByReason = userAdjustments.reduce((acc, adj) => {
+        const reason = adj.reason || 'Non spécifié';
+        if (!acc[reason]) {
+            acc[reason] = 0;
+        }
+        acc[reason] += adj.hours;
+        return acc;
+    }, {} as Record<string, number>);
+
+    return Object.entries(groupedByReason)
+        .map(([name, value]) => ({
+            name,
+            value: parseFloat((value as number).toFixed(2)),
+        }))
+        .filter(item => item.value !== 0);
+  }, [userAdjustments]);
 
   const weeklyChartData = useMemo(() => {
       return userWeeks
@@ -85,8 +95,6 @@ const Dashboard: React.FC = () => {
               heures: formatMinutesToHours(calculateWeekTotal(week)),
           }));
   }, [userWeeks]);
-
-  const COLORS = ['#9C5DF5', '#E9D5FF'];
 
   const handleSaveWeek = (updatedWeek: Week) => {
     updateWeek(updatedWeek);
@@ -132,22 +140,34 @@ const Dashboard: React.FC = () => {
         </div>
         
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-1 bg-white p-6 rounded-xl shadow-sm">
-            <h3 className="text-lg font-semibold text-text-dark mb-4">Répartition</h3>
-            <div style={{ width: '100%', height: 250 }}>
-              <ResponsiveContainer>
-                <PieChart>
-                  <Pie data={progressData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
-                    {progressData.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
-                  </Pie>
-                  <Tooltip formatter={(value) => `${value}h`} />
-                </PieChart>
-              </ResponsiveContainer>
+          <div className="lg:col-span-1 bg-white p-6 rounded-xl shadow-sm flex flex-col">
+            <h3 className="text-lg font-semibold text-text-dark mb-4">Bilan des ajustements par raison</h3>
+            <div className="flex-1 flex items-center justify-center" style={{ minHeight: 250 }}>
+             {adjustmentChartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart 
+                    layout="vertical" 
+                    data={adjustmentChartData}
+                    margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                    <XAxis type="number" unit="h" />
+                    <YAxis dataKey="name" type="category" width={80} tick={{ fontSize: 10 }} interval={0} />
+                    <Tooltip formatter={(value) => [`${value}h`, 'Total']} cursor={{fill: 'rgba(156, 93, 245, 0.1)'}} />
+                    <ReferenceLine x={0} stroke="#6b7280" />
+                    <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+                      {adjustmentChartData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.value > 0 ? '#10B981' : '#EF4444'} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="text-center text-gray-500">
+                    <p>Aucun ajustement manuel enregistré.</p>
+                </div>
+              )}
             </div>
-            <div className="flex justify-center items-center space-x-4 mt-4 text-sm">
-                  <div className="flex items-center space-x-2"><span className="w-3 h-3 rounded-full bg-primary"></span><span>Heures travaillées</span></div>
-                  <div className="flex items-center space-x-2"><span className="w-3 h-3 rounded-full bg-purple-200"></span><span>Heures restantes</span></div>
-              </div>
           </div>
           <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm">
             <h3 className="text-lg font-semibold text-text-dark mb-4">12 dernières semaines</h3>

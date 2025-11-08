@@ -111,10 +111,7 @@ const TemplatesPage: React.FC = () => {
                                 </select>
                                 <span className="text-sm text-gray-500">h</span>
                                 <select value={adjMinutes} onChange={e => setAdjMinutes(e.target.value)} className="bg-gray-50 border border-gray-300 text-sm rounded-lg p-2.5">
-                                    <option value="0">00</option>
-                                    <option value="15">15</option>
-                                    <option value="30">30</option>
-                                    <option value="45">45</option>
+                                    {[...Array(60).keys()].map(m => <option key={m} value={m}>{m.toString().padStart(2, '0')}</option>)}
                                 </select>
                                 <span className="text-sm text-gray-500">m</span>
                             </div>
